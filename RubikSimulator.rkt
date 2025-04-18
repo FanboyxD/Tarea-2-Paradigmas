@@ -1,395 +1,545 @@
 #lang racket
+(require racket/draw racket/gui/base)
 
-;; Función para obtener el elemento en la posición fila/columna específica de una cara
+;; NUEVA IMPLEMENTACIÓN DEL CUBO DE RUBIK CON REPRESENTACIÓN EN GRAFO
+
+;; Función para obtener una cara del cubo por su nombre/posición
+(define (obtener-cara cubo nombre)
+  (cond
+    [(null? cubo) '()]
+    [(equal? (caar cubo) nombre) (car cubo)]
+    [else (obtener-cara (cdr cubo) nombre)]))
+
+;; Función para obtener el contenido de una cara (elementos sin el nombre)
+(define (obtener-contenido-cara cubo nombre)
+  (cadr (obtener-cara cubo nombre)))
+
+;; Función para actualizar una cara en el cubo
+(define (actualizar-cara cubo nombre nuevo-contenido)
+  (cond
+    [(null? cubo) '()]
+    [(equal? (caar cubo) nombre) 
+     (cons (list nombre nuevo-contenido) (cdr cubo))]
+    [else (cons (car cubo) (actualizar-cara (cdr cubo) nombre nuevo-contenido))]))
+
+;; FUNCIONES PARA MANIPULAR ELEMENTOS DE LAS CARAS
+
+;; Función para obtener un elemento específico de una cara por índice
+(define (obtener-elemento-por-indice cara indice)
+  (cond
+    [(= indice 0) (car cara)]
+    [else (obtener-elemento-por-indice (cdr cara) (- indice 1))]))
+
+;; Función corregida para actualizar un elemento específico de una cara por índice
+(define (actualizar-elemento-por-indice cara indice nuevo-valor)
+  (cond
+    [(null? cara) '()]  ;; Manejo de caso base cuando la cara está vacía
+    [(= indice 0) (cons nuevo-valor (cdr cara))]
+    [(< indice 0) cara]  ;; Manejo de índice negativo
+    [else (cons (car cara) (actualizar-elemento-por-indice (cdr cara) (- indice 1) nuevo-valor))]))
+
+;; Función para convertir posición fila/columna a índice lineal
+(define (posicion-a-indice fila columna tamaño)
+  (+ (- columna 1) (* (- fila 1) tamaño)))
+
+;; Función para obtener elemento en posición fila/columna
 (define (obtener-elemento cara fila columna tamaño)
-  (cond
-    [(= tamaño 2) 
-     (cond
-       [(and (= fila 1) (= columna 1)) (car cara)]
-       [(and (= fila 1) (= columna 2)) (car (cdr cara))]
-       [(and (= fila 2) (= columna 1)) (car (cdr (cdr cara)))]
-       [(and (= fila 2) (= columna 2)) (car (cdr (cdr (cdr cara))))])]
-    [(= tamaño 3)
-     (cond
-       [(and (= fila 1) (= columna 1)) (car cara)]
-       [(and (= fila 1) (= columna 2)) (car (cdr cara))]
-       [(and (= fila 1) (= columna 3)) (car (cdr (cdr cara)))]
-       [(and (= fila 2) (= columna 1)) (car (cdr (cdr (cdr cara))))]
-       [(and (= fila 2) (= columna 2)) (car (cdr (cdr (cdr (cdr cara)))))]
-       [(and (= fila 2) (= columna 3)) (car (cdr (cdr (cdr (cdr (cdr cara))))))]
-       [(and (= fila 3) (= columna 1)) (car (cdr (cdr (cdr (cdr (cdr (cdr cara)))))))]
-       [(and (= fila 3) (= columna 2)) (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr cara))))))))]
-       [(and (= fila 3) (= columna 3)) (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr cara)))))))))])]
-    [(>= tamaño 4)
-     (define indice (+ (- columna 1) (* (- fila 1) tamaño)))
-     (define (obtener-en-indice lista idx actual)
-       (if (= actual idx)
-           (car lista)
-           (obtener-en-indice (cdr lista) idx (+ actual 1))))
-     (obtener-en-indice cara indice 0)]))
+  (obtener-elemento-por-indice cara (posicion-a-indice fila columna tamaño)))
 
-;; Función para actualizar un elemento en la posición fila/columna específica de una cara
+;; Función para actualizar elemento en posición fila/columna
 (define (actualizar-elemento cara fila columna nuevo-valor tamaño)
-  (cond
-    [(= tamaño 2)
-     (cond
-       [(and (= fila 1) (= columna 1)) 
-        (cons nuevo-valor (cdr cara))]
-       [(and (= fila 1) (= columna 2)) 
-        (cons (car cara) (cons nuevo-valor (cdr (cdr cara))))]
-       [(and (= fila 2) (= columna 1)) 
-        (cons (car cara) (cons (car (cdr cara)) (cons nuevo-valor (cdr (cdr (cdr cara))))))]
-       [(and (= fila 2) (= columna 2)) 
-        (cons (car cara) (cons (car (cdr cara)) (cons (car (cdr (cdr cara))) (cons nuevo-valor '()))))])]
-    [(>= tamaño 3)
-     (define (actualizar-en-indice lista idx nuevo-val actual)
-       (if (= actual idx)
-           (cons nuevo-val (cdr lista))
-           (cons (car lista) (actualizar-en-indice (cdr lista) idx nuevo-val (+ actual 1)))))
-     (define indice (+ (- columna 1) (* (- fila 1) tamaño)))
-     (actualizar-en-indice cara indice nuevo-valor 0)]))
+  (actualizar-elemento-por-indice cara (posicion-a-indice fila columna tamaño) nuevo-valor))
 
-;; Función para obtener una fila completa de una cara
+;; FUNCIONES PARA MANIPULAR FILAS Y COLUMNAS
+
+;; Función corregida para obtener una fila completa de una cara
 (define (obtener-fila cara fila-num tamaño)
-  (define (construir-fila cara fila col tamaño resultado)
+  (define (extraer-fila cara fila col tamaño resultado)
     (if (> col tamaño)
         resultado
-        (construir-fila cara fila (+ col 1) tamaño 
-                        (append resultado (cons (obtener-elemento cara fila col tamaño) '())))))
-  (construir-fila cara fila-num 1 tamaño '()))
+        (extraer-fila cara fila (+ col 1) tamaño 
+                    (append resultado (list (obtener-elemento cara fila col tamaño))))))
+  (extraer-fila cara fila-num 1 tamaño '()))
 
 ;; Función para obtener una columna completa de una cara
 (define (obtener-columna cara columna-num tamaño)
-  (define (construir-columna cara fila col tamaño resultado)
+  (define (extraer-columna cara col fila tamaño resultado)
     (if (> fila tamaño)
         resultado
-        (construir-columna cara (+ fila 1) col tamaño 
-                           (append resultado (cons (obtener-elemento cara fila col tamaño) '())))))
-  (construir-columna cara 1 columna-num tamaño '()))
+        (extraer-columna cara col (+ fila 1) tamaño 
+                       (append resultado (list (obtener-elemento cara fila col tamaño))))))
+  (extraer-columna cara columna-num 1 tamaño '()))
 
 ;; Función para actualizar una fila completa de una cara
 (define (actualizar-fila cara fila-num nueva-fila tamaño)
-  (define (actualizar-elementos cara fila col tamaño nueva-fila resultado)
+  (define (actualizar-elementos-fila cara fila col tamaño nueva-fila resultado)
     (if (> col tamaño)
         resultado
-        (actualizar-elementos 
+        (actualizar-elementos-fila 
          cara fila (+ col 1) tamaño (cdr nueva-fila)
          (actualizar-elemento resultado fila col (car nueva-fila) tamaño))))
-  (actualizar-elementos cara fila-num 1 tamaño nueva-fila cara))
+  (actualizar-elementos-fila cara fila-num 1 tamaño nueva-fila cara))
 
 ;; Función para actualizar una columna completa de una cara
 (define (actualizar-columna cara columna-num nueva-columna tamaño)
-  (define (actualizar-elementos cara fila col tamaño nueva-columna resultado)
+  (define (actualizar-elementos-columna cara fila col tamaño nueva-columna resultado)
     (if (> fila tamaño)
         resultado
-        (actualizar-elementos 
+        (actualizar-elementos-columna 
          cara (+ fila 1) col tamaño (cdr nueva-columna)
          (actualizar-elemento resultado fila col (car nueva-columna) tamaño))))
-  (actualizar-elementos cara 1 columna-num tamaño nueva-columna cara))
+  (actualizar-elementos-columna cara 1 columna-num tamaño nueva-columna cara))
+
+;; FUNCIONES PARA ROTAR CARAS
 
 ;; Función para rotar una cara en sentido horario
 (define (rotar-cara-horario cara tamaño)
-  (define (construir-cara fila col tamaño resultado)
+  (define (construir-cara-rotada fila col tamaño origen resultado)
     (if (> fila tamaño)
         resultado
         (if (> col tamaño)
-            (construir-cara (+ fila 1) 1 tamaño resultado)
-            (construir-cara fila (+ col 1) tamaño 
-                            (actualizar-elemento resultado col (- tamaño (- fila 1)) 
-                                                 (obtener-elemento cara fila col tamaño) tamaño)))))
-  (construir-cara 1 1 tamaño cara))
+            (construir-cara-rotada (+ fila 1) 1 tamaño origen resultado)
+            (construir-cara-rotada fila (+ col 1) tamaño origen 
+                            (actualizar-elemento resultado (- tamaño (- col 1)) fila 
+                                               (obtener-elemento origen fila col tamaño) tamaño)))))
+  (construir-cara-rotada 1 1 tamaño cara cara))
 
 ;; Función para rotar una cara en sentido antihorario
 (define (rotar-cara-antihorario cara tamaño)
-  (define (construir-cara fila col tamaño resultado)
+  (define (construir-cara-rotada fila col tamaño origen resultado)
     (if (> fila tamaño)
         resultado
         (if (> col tamaño)
-            (construir-cara (+ fila 1) 1 tamaño resultado)
-            (construir-cara fila (+ col 1) tamaño 
-                            (actualizar-elemento resultado (- tamaño (- col 1)) fila 
-                                                 (obtener-elemento cara fila col tamaño) tamaño)))))
-  (construir-cara 1 1 tamaño cara))
+            (construir-cara-rotada (+ fila 1) 1 tamaño origen resultado)
+            (construir-cara-rotada fila (+ col 1) tamaño origen 
+                            (actualizar-elemento resultado col (- tamaño (- fila 1)) 
+                                               (obtener-elemento origen fila col tamaño) tamaño)))))
+  (construir-cara-rotada 1 1 tamaño cara cara))
 
-;; Función para mover una fila hacia la derecha (MODIFICADA)
-(define (mover-fila-derecha cubo fila tamaño)
-  ;; Extraer caras
-  (define frontal (car cubo))
-  (define derecha (car (cdr cubo)))
-  (define trasera (car (cdr (cdr cubo))))
-  (define izquierda (car (cdr (cdr (cdr cubo)))))
-  (define superior (car (cdr (cdr (cdr (cdr cubo))))))
-  (define inferior (car (cdr (cdr (cdr (cdr (cdr cubo)))))))
-  
-  ;; Obtener las filas que se van a mover
-  (define fila-frontal (obtener-fila frontal fila tamaño))
-  (define fila-derecha (obtener-fila derecha fila tamaño))
-  (define fila-trasera (obtener-fila trasera fila tamaño))
-  (define fila-izquierda (obtener-fila izquierda fila tamaño))
-  
-  ;; Actualizar caras con las nuevas filas
-  (define nueva-cara-frontal (actualizar-fila frontal fila fila-izquierda tamaño))
-  (define nueva-cara-derecha (actualizar-fila derecha fila fila-frontal tamaño))
-  (define nueva-cara-trasera (actualizar-fila trasera fila fila-derecha tamaño))
-  (define nueva-cara-izquierda (actualizar-fila izquierda fila fila-trasera tamaño))
-  
-  ;; MODIFICACIÓN MÁS PROFUNDA: Para la cara superior específicamente
-  (define nueva-cara-superior
-    (if (= fila 1)
-        ;; Si es la primera fila, invertimos la rotación normal
-        (rotar-cara-antihorario superior tamaño) ;; Invertido
-        superior)) ;; Si no es la primera fila, no cambia
-  
-  ;; Para la cara inferior mantenemos la lógica original
-  (define nueva-cara-inferior
-    (if (= fila tamaño)
-        (rotar-cara-horario inferior tamaño)
-        inferior))
-  
-  ;; Construir nuevo cubo con modificación explícita para la cara superior
-  (cons nueva-cara-frontal
-        (cons nueva-cara-derecha
-              (cons nueva-cara-trasera
-                    (cons nueva-cara-izquierda
-                          (cons nueva-cara-superior
-                                (cons nueva-cara-inferior '()))))))
-  )
+;; MOVIMIENTOS DEL CUBO
 
-;; Función para mover una fila hacia la izquierda (MODIFICADA)
-(define (mover-fila-izquierda cubo fila tamaño)
-  ;; Extraer caras
-  (define frontal (car cubo))
-  (define derecha (car (cdr cubo)))
-  (define trasera (car (cdr (cdr cubo))))
-  (define izquierda (car (cdr (cdr (cdr cubo)))))
-  (define superior (car (cdr (cdr (cdr (cdr cubo))))))
-  (define inferior (car (cdr (cdr (cdr (cdr (cdr cubo)))))))
-  
-  ;; Obtener las filas que se van a mover
-  (define fila-frontal (obtener-fila frontal fila tamaño))
-  (define fila-derecha (obtener-fila derecha fila tamaño))
-  (define fila-trasera (obtener-fila trasera fila tamaño))
-  (define fila-izquierda (obtener-fila izquierda fila tamaño))
-  
-  ;; Actualizar caras con las nuevas filas
-  (define nueva-cara-frontal (actualizar-fila frontal fila fila-derecha tamaño))
-  (define nueva-cara-derecha (actualizar-fila derecha fila fila-trasera tamaño))
-  (define nueva-cara-trasera (actualizar-fila trasera fila fila-izquierda tamaño))
-  (define nueva-cara-izquierda (actualizar-fila izquierda fila fila-frontal tamaño))
-  
-  ;; MODIFICACIÓN MÁS PROFUNDA: Para la cara superior específicamente
-  (define nueva-cara-superior
-    (if (= fila 1)
-        ;; Si es la primera fila, invertimos la rotación normal
-        (rotar-cara-antihorario superior tamaño) ;; Invertido
-        superior)) ;; Si no es la primera fila, no cambia
-  
-  ;; Para la cara inferior mantenemos la lógica original
-  (define nueva-cara-inferior
-    (if (= fila tamaño)
-        (rotar-cara-antihorario inferior tamaño)
-        inferior))
-  
-  ;; Construir nuevo cubo con modificación explícita para la cara superior
-  (cons nueva-cara-frontal
-        (cons nueva-cara-derecha
-              (cons nueva-cara-trasera
-                    (cons nueva-cara-izquierda
-                          (cons nueva-cara-superior
-                                (cons nueva-cara-inferior '()))))))
-  )
+;; Función para mover una fila hacia la derecha usando car/cdr
+(define (mover-fila-derecha-car-cdr cubo fila tamaño)
+  ;; Construir nuevo cubo directamente
+  (list 
+   (list "Cara blanca" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara blanca")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara azul")) fila tamaño) 
+          tamaño))
+   (list "Cara verde" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara verde")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara blanca")) fila tamaño) 
+          tamaño))
+   (list "Cara amarilla" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara amarilla")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara verde")) fila tamaño) 
+          tamaño))
+   (list "Cara azul" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara azul")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara amarilla")) fila tamaño) 
+          tamaño))
+   (list "Cara roja" 
+         (if (= fila 1)
+             (rotar-cara-horario (cadr (obtener-cara cubo "Cara roja")) tamaño)
+             (cadr (obtener-cara cubo "Cara roja"))))
+   (list "Cara naranja" 
+         (if (= fila tamaño)
+             (rotar-cara-antihorario (cadr (obtener-cara cubo "Cara naranja")) tamaño)
+             (cadr (obtener-cara cubo "Cara naranja"))))))
 
-;; Función para mover una columna hacia arriba - MODIFICADA
-(define (mover-columna-arriba cubo columna tamaño)
-  ;; Extraer caras
-  (define frontal (car cubo))
-  (define derecha (car (cdr cubo)))
-  (define trasera (car (cdr (cdr cubo))))
-  (define izquierda (car (cdr (cdr (cdr cubo)))))
-  (define superior (car (cdr (cdr (cdr (cdr cubo))))))
-  (define inferior (car (cdr (cdr (cdr (cdr (cdr cubo)))))))
-  
-  ;; Obtener las columnas que se van a mover
-  (define columna-frontal (obtener-columna frontal columna tamaño))
-  (define columna-superior (obtener-columna superior columna tamaño))
-  (define columna-trasera-rev (obtener-columna trasera (- tamaño (- columna 1)) tamaño))
-  (define columna-trasera (reverse columna-trasera-rev))
-  (define columna-inferior (obtener-columna inferior columna tamaño))
-  
-  ;; Actualizar las caras
-  (define nueva-cara-frontal (actualizar-columna frontal columna columna-inferior tamaño))
-  (define nueva-cara-superior (actualizar-columna superior columna (reverse columna-frontal) tamaño))
-  (define nueva-cara-trasera (actualizar-columna trasera (- tamaño (- columna 1)) (reverse columna-superior) tamaño))
-  (define nueva-cara-inferior (actualizar-columna inferior columna columna-trasera tamaño))
-  
-  ;; Actualizar cara derecha o izquierda según la columna que se rota
-  (define nueva-cara-lateral 
-    (if (= columna 1)
-        (rotar-cara-antihorario izquierda tamaño)
-        (if (= columna tamaño)
-            (rotar-cara-horario derecha tamaño)
-            derecha)))
-  
-  ;; Construir nuevo cubo
-  (cons nueva-cara-frontal
-        (cons (if (= columna tamaño) nueva-cara-lateral derecha)
-              (cons nueva-cara-trasera
-                    (cons (if (= columna 1) nueva-cara-lateral izquierda)
-                          (cons nueva-cara-superior
-                                (cons nueva-cara-inferior '()))))))
-  )
+;; Función para mover una fila hacia la izquierda 
+(define (mover-fila-izquierda-car-cdr cubo fila tamaño)
+  ;; Construir nuevo cubo directamente
+  (list 
+   (list "Cara blanca" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara blanca")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara verde")) fila tamaño) 
+          tamaño))
+   (list "Cara verde" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara verde")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara amarilla")) fila tamaño) 
+          tamaño))
+   (list "Cara amarilla" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara amarilla")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara azul")) fila tamaño) 
+          tamaño))
+   (list "Cara azul" 
+         (actualizar-fila 
+          (cadr (obtener-cara cubo "Cara azul")) 
+          fila 
+          (obtener-fila (cadr (obtener-cara cubo "Cara blanca")) fila tamaño) 
+          tamaño))
+   (list "Cara roja" 
+         (if (= fila 1)
+             (rotar-cara-antihorario (cadr (obtener-cara cubo "Cara roja")) tamaño)
+             (cadr (obtener-cara cubo "Cara roja"))))
+   (list "Cara naranja" 
+         (if (= fila tamaño)
+             (rotar-cara-horario (cadr (obtener-cara cubo "Cara naranja")) tamaño)
+             (cadr (obtener-cara cubo "Cara naranja"))))))
 
-;; Función para mover una columna hacia abajo - MODIFICADA
-(define (mover-columna-abajo cubo columna tamaño)
-  ;; Extraer caras
-  (define frontal (car cubo))
-  (define derecha (car (cdr cubo)))
-  (define trasera (car (cdr (cdr cubo))))
-  (define izquierda (car (cdr (cdr (cdr cubo)))))
-  (define superior (car (cdr (cdr (cdr (cdr cubo))))))
-  (define inferior (car (cdr (cdr (cdr (cdr (cdr cubo)))))))
-  
-  ;; Obtener las columnas que se van a mover
-  (define columna-frontal (obtener-columna frontal columna tamaño))
-  (define columna-superior (obtener-columna superior columna tamaño))
-  (define columna-trasera-rev (obtener-columna trasera (- tamaño (- columna 1)) tamaño))
-  (define columna-trasera (reverse columna-trasera-rev))
-  (define columna-inferior (obtener-columna inferior columna tamaño))
-  
-  ;; Actualizar las caras
-  (define nueva-cara-frontal (actualizar-columna frontal columna columna-superior tamaño))
-  (define nueva-cara-superior (actualizar-columna superior columna (reverse columna-trasera) tamaño))
-  (define nueva-cara-trasera (actualizar-columna trasera (- tamaño (- columna 1)) (reverse columna-inferior) tamaño))
-  (define nueva-cara-inferior (actualizar-columna inferior columna columna-frontal tamaño))
-  
-  ;; Actualizar cara derecha o izquierda según la columna que se rota
-  (define nueva-cara-lateral 
-    (if (= columna 1)
-        (rotar-cara-horario izquierda tamaño)
-        (if (= columna tamaño)
-            (rotar-cara-antihorario derecha tamaño)
-            derecha)))
-  
-  ;; Construir nuevo cubo
-  (cons nueva-cara-frontal
-        (cons (if (= columna tamaño) nueva-cara-lateral derecha)
-              (cons nueva-cara-trasera
-                    (cons (if (= columna 1) nueva-cara-lateral izquierda)
-                          (cons nueva-cara-superior
-                                (cons nueva-cara-inferior '()))))))
-  )
+;; Función para mover una columna hacia arriba 
+(define (mover-columna-arriba-car-cdr cubo columna tamaño)
+  ;; Construir nuevo cubo directamente
+  (list 
+   (list "Cara blanca" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara blanca")) 
+          columna 
+          (obtener-columna (cadr (obtener-cara cubo "Cara naranja")) columna tamaño) 
+          tamaño))
+   (list "Cara verde" 
+         (if (= columna tamaño)
+             (rotar-cara-horario (cadr (obtener-cara cubo "Cara verde")) tamaño)
+             (cadr (obtener-cara cubo "Cara verde"))))
+   (list "Cara amarilla" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara amarilla")) 
+          (- (+ tamaño 1) columna) 
+          (reverse (obtener-columna (cadr (obtener-cara cubo "Cara roja")) columna tamaño)) 
+          tamaño))
+   (list "Cara azul" 
+         (if (= columna 1)
+             (rotar-cara-antihorario (cadr (obtener-cara cubo "Cara azul")) tamaño)
+             (cadr (obtener-cara cubo "Cara azul"))))
+   (list "Cara roja" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara roja")) 
+          columna 
+          (obtener-columna (cadr (obtener-cara cubo "Cara blanca")) columna tamaño) 
+          tamaño))
+   (list "Cara naranja" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara naranja")) 
+          columna 
+          (reverse (obtener-columna (cadr (obtener-cara cubo "Cara amarilla")) (- (+ tamaño 1) columna) tamaño)) 
+          tamaño))))
 
-;; Función para crear una cara con colores uniformes
-(define (crear-cara color tamaño)
-  (define (construir-cara color tamaño count)
-    (if (= count (* tamaño tamaño))
-        '()
-        (cons color (construir-cara color tamaño (+ count 1)))))
-  (construir-cara color tamaño 0))
+;; Función para mover una columna hacia abajo 
+(define (mover-columna-abajo-car-cdr cubo columna tamaño)
+  ;; Construir nuevo cubo directamente
+  (list 
+   (list "Cara blanca" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara blanca")) 
+          columna 
+          (obtener-columna (cadr (obtener-cara cubo "Cara roja")) columna tamaño) 
+          tamaño))
+   (list "Cara verde" 
+         (if (= columna tamaño)
+             (rotar-cara-antihorario (cadr (obtener-cara cubo "Cara verde")) tamaño)
+             (cadr (obtener-cara cubo "Cara verde"))))
+   (list "Cara amarilla" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara amarilla")) 
+          (- (+ tamaño 1) columna) 
+          (reverse (obtener-columna (cadr (obtener-cara cubo "Cara naranja")) columna tamaño)) 
+          tamaño))
+   (list "Cara azul" 
+         (if (= columna 1)
+             (rotar-cara-horario (cadr (obtener-cara cubo "Cara azul")) tamaño)
+             (cadr (obtener-cara cubo "Cara azul"))))
+   (list "Cara roja" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara roja")) 
+          columna 
+          (reverse (obtener-columna (cadr (obtener-cara cubo "Cara amarilla")) (- (+ tamaño 1) columna) tamaño)) 
+          tamaño))
+   (list "Cara naranja" 
+         (actualizar-columna 
+          (cadr (obtener-cara cubo "Cara naranja")) 
+          columna 
+          (obtener-columna (cadr (obtener-cara cubo "Cara blanca")) columna tamaño) 
+          tamaño))))
+  
+  
 
-;; Función para inicializar el cubo con tamaño variable
+;; FUNCIONES PARA INICIALIZACIÓN DE CUBOS DE DIFERENTES TAMAÑOS
+
+;; Función para crear la representación de un cubo 2x2
+(define (crear-cubo-2x2)
+  (list
+   (list "Cara blanca" (list 'WRB 'WRG 'WOB 'WOG))
+   (list "Cara verde" (list 'GRW 'GRY 'GOW 'GOY))
+   (list "Cara amarilla" (list 'YRG 'YRB 'YOG 'YOB))
+   (list "Cara azul" (list 'BRY 'BRW 'BOY 'BOW))
+   (list "Cara roja" (list 'RYB 'RYG 'RWB 'RWG))
+   (list "Cara naranja" (list 'OWB 'OWY 'OYB 'OYG))))
+
+;; Función para crear la representación de un cubo 3x3
+(define (crear-cubo-3x3)
+  (list
+   (list "Cara blanca" (list 'WRB 'WR 'WRG 'WB 'W 'WG 'WOB 'WO 'WOG))
+   (list "Cara verde" (list 'GRW 'GR 'GRY 'GW 'G 'GY 'GOW 'GO 'GOY))
+   (list "Cara amarilla" (list 'YRG 'YR 'YRB 'YG 'Y 'YB 'YOG 'YO 'YOB))
+   (list "Cara azul" (list 'BRY 'BR 'BRW 'BY 'B 'BW 'BOY 'BO 'BOW))
+   (list "Cara roja" (list 'RYB 'RY 'RYG 'RB 'R 'RG 'RWB 'RW 'RWG))
+   (list "Cara naranja" (list 'OWB 'OW 'OWG 'OB 'O 'OG 'OYB 'OY 'OYG))))
+
+;; Función para crear la representación de un cubo 4x4
+(define (crear-cubo-4x4)
+  (list
+   (list "Cara blanca" (list 'WRB 'WR1 'WR2 'WRG 'WB1 'W1 'W2 'WG1 'WB2 'W3 'W4 'WG2 'WOB 'WO1 'WO2 'WOG))
+   (list "Cara verde" (list 'GRW 'GR1 'GR2 'GRY 'GW1 'G1 'G2 'GY1 'GW2 'G3 'G4 'GY2 'GOW 'GO1 'GO2 'GOY))
+   (list "Cara amarilla" (list 'YRG 'YR1 'YR2 'YRB 'YG1 'Y1 'Y2 'YB1 'YG2 'Y3 'Y4 'YB2 'YOG 'YO1 'YO2 'YOB))
+   (list "Cara azul" (list 'BRY 'BR1 'BR2 'BRW 'BY1 'B1 'B2 'BW1 'BY2 'B3 'B4 'BW2 'BOY 'BO1 'BO2 'BOW))
+   (list "Cara roja" (list 'RYB 'RY1 'RY2 'RYG 'RB1 'R1 'R2 'RG1 'RB2 'R3 'R4 'RG2 'RWB 'RW1 'RW2 'RWG))
+   (list "Cara naranja" (list 'OWB 'OW1 'OW2 'OWG 'OB1 'O1 'O2 'OG1 'OB2 'O3 'O4 'OG2 'OYB 'OY1 'OY2 'OYG))))
+
+;; Función para crear la representación de un cubo 5x5
+(define (crear-cubo-5x5)
+  (list
+   (list "Cara blanca" (list 'WRB 'WR1 'WR2 'WR3 'WRG 'WB1 'W1 'W2 'W3 'WG1 'WB2 'W4 'W5 'W6 'WG2 'WB3 'W7 'W8 'W9 'WG3 'WOB 'WO1 'WO2 'WO3 'WOG))
+   (list "Cara verde" (list 'GRW 'GR1 'GR2 'GR3 'GRY 'GW1 'G1 'G2 'G3 'GY1 'GW2 'G4 'G5 'G6 'GY2 'GW3 'G7 'G8 'G9 'GY3 'GOY 'GO1 'GO2 'GO3 'GOY))
+   (list "Cara amarilla" (list 'YRG 'YR1 'YR2 'YR3 'YRB 'YG1 'Y1 'Y2 'Y3 'YB1 'YG2 'Y4 'Y5 'Y6 'YB2 'YG3 'Y7 'Y8 'Y9 'YB3 'YOG 'YO1 'YO2 'YO3 'YBO))
+   (list "Cara azul" (list 'BRY 'BR1 'BR2 'BR3 'BRW 'BY1 'B1 'B2 'B3 'BW1 'BY2 'B4 'B5 'B6 'BW2 'BY3 'B7 'B8 'B9 'BW3 'BOY 'BO1 'BO2 'BO3 'BOW))
+   (list "Cara roja" (list 'RYB 'RY1 'RY2 'RY3 'RYG 'RB1 'R1 'R2 'R3 'RG1 'RB2 'R4 'R5 'R6 'RG2 'RB3 'R7 'R8 'R9 'RG3 'RWB 'RW1 'RW2 'RW3 'RWG))
+   (list "Cara naranja" (list 'OWB 'OW1 'OW2 'OW3 'OWG 'OB1 'O1 'O2 'O3 'OG1 'OB2 'O4 'O5 'O6 'OG2 'OB3 'O7 'O8 'O9 'OG3 'OYB 'OY1 'OY2 'OY3 'OYG))))
+
+;; Función para crear la representación de un cubo 6x6
+(define (crear-cubo-6x6)
+  (list
+   (list "Cara blanca" (list 'WRB 'WR1 'WR2 'WR3 'WR4 'WRG 'WB1 'W1 'W2 'W3 'W4 'WG1 'WB2 'W5 'W6 'W7 'W8 'WG2 'WB3 'W9 'W10 'W11 'W12 'WG3 'WB4 'W13 'W14 'W15 'W16 'WG4 'WOB 'WO1 'WO2 'WO3 'WO4 'WOG))
+   (list "Cara verde" (list 'GRW 'GR1 'GR2 'GR3 'GR4 'GRY 'GW1 'G1 'G2 'G3 'G4 'GY1 'GW2 'G5 'G6 'G7 'G8 'GY2 'GW3 'G9 'G10 'G11 'G12 'GY3 'GW4 'G13 'G14 'G15 'G16 'GY4 'GOW 'GO1 'GO2 'GO3 'GO4 'GOY))
+   (list "Cara amarilla" (list 'YRG 'YR1 'YR2 'YR3 'YR4 'YRB 'YG1 'Y1 'Y2 'Y3 'Y4 'YB1 'YG2 'Y5 'Y6 'Y7 'Y8 'YB2 'YG3 'Y9 'Y10 'Y11 'Y12 'YB3 'YG4 'Y13 'Y14 'Y15 'Y16 'YB4 'YOG 'YO1 'YO2 'YO3 'YO4 'YOB))
+   (list "Cara azul" (list 'BRY 'BR1 'BR2 'BR3 'BR4 'BRW 'BY1 'B1 'B2 'B3 'B4 'BW1 'BY2 'B5 'B6 'B7 'B8 'BW2 'BY3 'B9 'B10 'B11 'B12 'BW3 'BY4 'B13 'B14 'B15 'B16 'BW4 'BOY 'BO1 'BO2 'BO3 'BO4 'BOW))
+   (list "Cara roja" (list 'RYB 'RY1 'RY2 'RY3 'RY4 'RYG 'RB1 'R1 'R2 'R3 'R4 'RG1 'RB2 'R5 'R6 'R7 'R8 'RG2 'RB3 'R9 'R10 'R11 'R12 'RG3 'RB4 'R13 'R14 'R15 'R16 'RG4 'RWB 'RW1 'RW2 'RW3 'R4 'RWG))
+   (list "Cara naranja" (list 'OWB 'OW1 'OW2 'OW3 'OW4 'OWG 'OB1 'O1 'O2 'O3 'O4 'OG1 'OB2 'O5 'O6 'O7 'O8 'OG2 'OB3 'O9 'O10 'O11 'O12 'OG3 'OB4 'O13 'O14 'O15 'O16 'OG4 'OYB 'OY1 'OY2 'OY3 'OY4 'OYG))))
+
+;; Función para inicializar el cubo según el tamaño
 (define (inicializar-cubo tamaño)
-  (cons (crear-cara 'w tamaño)         ;; Frontal (blanco)
-        (cons (crear-cara 'g tamaño)   ;; Derecha (verde)
-              (cons (crear-cara 'y tamaño) ;; Trasera (amarilla)
-                    (cons (crear-cara 'b tamaño) ;; Izquierda (azul)
-                          (cons (crear-cara 'r tamaño) ;; Superior (rojo)
-                                (cons (crear-cara 'o tamaño) '())))))))  ;; Inferior (naranja)
+  (cond
+    [(= tamaño 2) (crear-cubo-2x2)]
+    [(= tamaño 3) (crear-cubo-3x3)]
+    [(= tamaño 4) (crear-cubo-4x4)]
+    [(= tamaño 5) (crear-cubo-5x5)]
+    [(= tamaño 6) (crear-cubo-6x6)]))
 
-;; Función para mostrar el cubo de tamaño variable
+;; FUNCIONES PARA VISUALIZACIÓN DEL CUBO
+
+;; Función para mostrar una cara del cubo
+(define (mostrar-cara cara nombre tamaño)
+  (displayln (string-append "Cara " nombre ":"))
+  (define (mostrar-fila fila-inicio col-total fila-actual col-actual)
+    (cond
+      [(> col-actual col-total) 
+       (newline)
+       (if (>= fila-actual col-total)
+           (void)
+           (mostrar-fila (+ fila-inicio col-total) col-total (+ fila-actual 1) 1))]
+      [else
+       (display (obtener-elemento-por-indice cara (+ fila-inicio (- col-actual 1))))
+       (display " ")
+       (mostrar-fila fila-inicio col-total fila-actual (+ col-actual 1))]))
+  (mostrar-fila 0 tamaño 1 1))
+
+;; Función para mostrar todo el cubo
 (define (mostrar-cubo cubo tamaño)
   (displayln "Estado actual del cubo:")
-  
-  ;; Extraer caras
-  (define frontal (car cubo))
-  (define derecha (car (cdr cubo)))
-  (define trasera (car (cdr (cdr cubo))))
-  (define izquierda (car (cdr (cdr (cdr cubo)))))
-  (define superior (car (cdr (cdr (cdr (cdr cubo))))))
-  (define inferior (car (cdr (cdr (cdr (cdr (cdr cubo)))))))
-  
-  ;; Función auxiliar para mostrar una fila
-  (define (mostrar-fila cara fila col tamaño)
-    (if (> col tamaño)
-        (newline)
-        (begin
-          (display (obtener-elemento cara fila col tamaño))
-          (display " ")
-          (mostrar-fila cara fila (+ col 1) tamaño))))
-  
-  ;; Función para mostrar una cara normal
-  (define (mostrar-cara-normal cara nombre tamaño)
-    (displayln (string-append "Cara " nombre ":"))
-    (define (mostrar-filas cara fila tamaño)
-      (if (> fila tamaño)
-          (void)
-          (begin
-            (mostrar-fila cara fila 1 tamaño)
-            (mostrar-filas cara (+ fila 1) tamaño))))
-    (mostrar-filas cara 1 tamaño))
-  
-  ;; Función específica para mostrar la cara superior invertida
-  (define (mostrar-cara-superior-invertida cara nombre tamaño)
-    (displayln (string-append "Cara " nombre ":"))
-    ;; Recorremos las filas en orden inverso para la cara superior
-    (define (mostrar-filas-invertidas cara fila tamaño)
-      (if (< fila 1)
-          (void)
-          (begin
-            (mostrar-fila cara fila 1 tamaño)
-            (mostrar-filas-invertidas cara (- fila 1) tamaño))))
-    (mostrar-filas-invertidas cara tamaño tamaño))
-  
-  ;; Mostrar todas las caras, con la superior usando la función específica
-  (mostrar-cara-normal frontal "Frontal (Blanca)" tamaño)
-  (mostrar-cara-normal derecha "Derecha (Verde)" tamaño)
-  (mostrar-cara-normal trasera "Trasera (Amarilla)" tamaño)
-  (mostrar-cara-normal izquierda "Izquierda (Azul)" tamaño)
-  (mostrar-cara-superior-invertida superior "Superior (Rojo)" tamaño)
-  (mostrar-cara-normal inferior "Inferior (Naranja)" tamaño))
+  (mostrar-cara (cadr (obtener-cara cubo "Cara blanca")) "Frontal (Blanca)" tamaño)
+  (mostrar-cara (cadr (obtener-cara cubo "Cara verde")) "Derecha (Verde)" tamaño)
+  (mostrar-cara (cadr (obtener-cara cubo "Cara amarilla")) "Trasera (Amarilla)" tamaño)
+  (mostrar-cara (cadr (obtener-cara cubo "Cara azul")) "Izquierda (Azul)" tamaño)
+  (mostrar-cara (cadr (obtener-cara cubo "Cara roja")) "Superior (Roja)" tamaño)
+  (mostrar-cara (cadr (obtener-cara cubo "Cara naranja")) "Inferior (Naranja)" tamaño))
 
-;; Función para aplicar un movimiento (MODIFICADA para manejar símbolos)
-(define (aplicar-movimiento cubo movimiento tamaño)
-  (define mov-str (symbol->string movimiento))
-  (define tipo-movimiento (substring mov-str 0 1))
-  (define num (string->number (substring mov-str 1 (- (string-length mov-str) 1))))
-  (define direccion (substring mov-str (- (string-length mov-str) 1)))
+;; INTERFAZ DE USUARIO Y FUNCIONES PRINCIPALES
+
+;; Función para interpretar un movimiento individual
+(define (interpretar-movimiento cubo movimiento tamaño)
+  (define tipo-movimiento (string-ref (symbol->string movimiento) 0))
+  (define numero-fila-columna (string->number (string (string-ref (symbol->string movimiento) 1))))
+  (define direccion (string-ref (symbol->string movimiento) 2))
   
   (cond
-    [(equal? tipo-movimiento "F") 
-     (if (equal? direccion "D")
-         (mover-fila-derecha cubo num tamaño)
-         (mover-fila-izquierda cubo num tamaño))]
-    [(equal? tipo-movimiento "C") 
-     (if (equal? direccion "A")
-         (mover-columna-arriba cubo num tamaño)
-         (mover-columna-abajo cubo num tamaño))]
+    [(equal? tipo-movimiento #\F)
+     (cond
+       [(equal? direccion #\D) (mover-fila-derecha-car-cdr cubo numero-fila-columna tamaño)]
+       [(equal? direccion #\I) (mover-fila-izquierda-car-cdr cubo numero-fila-columna tamaño)]
+       [else cubo])]
+    [(equal? tipo-movimiento #\C)
+     (cond
+       [(equal? direccion #\A) (mover-columna-arriba-car-cdr cubo numero-fila-columna tamaño)]
+       [(equal? direccion #\B) (mover-columna-abajo-car-cdr cubo numero-fila-columna tamaño)]
+       [else cubo])]
     [else cubo]))
 
-;; Función recursiva para aplicar una secuencia de movimientos
-(define (aplicar-secuencia cubo secuencia tamaño)
-  (if (null? secuencia)
-      cubo
-      (aplicar-secuencia (aplicar-movimiento cubo (car secuencia) tamaño) (cdr secuencia) tamaño)))
+;; Función para aplicar una secuencia de movimientos
+(define (aplicar-movimientos cubo movimientos tamaño)
+  (cond
+    [(null? movimientos) cubo]
+    [else (aplicar-movimientos 
+           (interpretar-movimiento cubo (car movimientos) tamaño)
+           (cdr movimientos) 
+           tamaño)]))
 
-;; NUEVA FUNCIÓN RS que reemplaza la anterior interfaz de usuario
-(define (RS tamaño _ movimientos)
-  (define cubo-inicial (inicializar-cubo tamaño))
+;; Función principal para resolver el cubo
+(define (RS tamaño cubo-inicial movimientos)
+  (define cubo-resuelto 
+    (cond
+      [(null? cubo-inicial) (aplicar-movimientos (inicializar-cubo tamaño) movimientos tamaño)]
+      [else (aplicar-movimientos (car cubo-inicial) movimientos tamaño)]))
   
-  ;; Mostrar estado inicial
-  (displayln "Estado inicial del cubo:")
-  (mostrar-cubo cubo-inicial tamaño)
+  (mostrar-cubo cubo-resuelto tamaño)
+  (mostrar-interfaz-grafica cubo-resuelto)
+  cubo-resuelto)
+
+;; FUNCIONES PARA VISUALIZACIÓN GRÁFICA DEL CUBO
+
+;; Función mejorada para determinar el color basado en el símbolo
+(define (color-de-celda simbolo)
+  (define simbolo-str (symbol->string simbolo))
+  (define primer-caracter (string-ref simbolo-str 0))
+  (cond
+    [(equal? primer-caracter #\W) "white"]
+    [(equal? primer-caracter #\G) "green"]
+    [(equal? primer-caracter #\Y) "yellow"]
+    [(equal? primer-caracter #\B) "blue"]
+    [(equal? primer-caracter #\R) "red"]
+    [(equal? primer-caracter #\O) "orange"]
+    [else "gray"]))
+
+;; Función para obtener tamaño de cubo basado en contenido
+(define (obtener-tamaño-cubo contenido)
+  (define longitud (length contenido))
+  (exact-floor (sqrt longitud)))
+
+;; Dibuja una cara individual en un panel canvas
+(define (dibujar-cara canvas dc contenido x y tamaño)
+  (define cell-size 40)
+  (define fila 0)
+  (define i 0)
+  (define j 0)
+  (define (loop contenido fila i j)
+    (cond
+      [(null? contenido) '()]
+      [else
+       (send dc set-brush (make-object color% (color-de-celda (car contenido))) 'solid)
+       (send dc draw-rectangle (+ x (* j cell-size)) (+ y (* i cell-size)) cell-size cell-size)
+       (send dc set-text-foreground "black")
+       (send dc draw-text (symbol->string (car contenido)) (+ x (* j cell-size) 2) (+ y (* i cell-size) 8))
+       (if (= (+ j 1) tamaño)
+           (loop (cdr contenido) (+ fila 1) (+ i 1) 0)
+           (loop (cdr contenido) fila i (+ j 1)))]))
+  (loop contenido fila i j))
+
+;; Función para mostrar las etiquetas de las caras
+(define (mostrar-etiqueta-cara dc texto x y)
+  (send dc set-text-foreground "black")
+  (send dc draw-text texto x y))
+
+;; Función principal para crear y mostrar la interfaz gráfica
+(define (mostrar-interfaz-grafica cubo-resultado)
+  (define tamaño (obtener-tamaño-cubo (cadr (obtener-cara cubo-resultado "Cara blanca"))))
   
-  ;; Aplicar los movimientos
-  (define cubo-final (aplicar-secuencia cubo-inicial movimientos tamaño))
-  
-  ;; Mostrar estado final
-  (displayln "\nEstado final después de aplicar los movimientos:")
-  (mostrar-cubo cubo-final tamaño)
-  
-  ;; Devolver el cubo final
-  )
+  ;; Crear ventana
+  (define frame (new frame% [label (format "Cubo de Rubik ~ax~a" tamaño tamaño)] [width 700] [height 500]))
+
+  ;; Canvas donde se dibujarán las caras
+  (define canvas
+    (new canvas%
+         [parent frame]
+         [paint-callback
+          (lambda (canvas dc)
+            ;; Posiciones x, y para mostrar las caras en orden de cruz
+            (define posiciones
+              (cond
+                [(= tamaño 2)
+                 '((250 50)     ;; blanca
+                   (100 180)    ;; verde
+                   (250 310)    ;; amarilla
+                   (400 180)    ;; azul
+                   (250 180)    ;; roja
+                   (550 180))]  ;; naranja
+                [(= tamaño 3)
+                 '((250 30)     ;; blanca
+                   (100 180)    ;; verde
+                   (250 330)    ;; amarilla
+                   (400 180)    ;; azul
+                   (250 180)    ;; roja
+                   (550 180))]  ;; naranja
+                [(= tamaño 4)
+                 '((240 10)     ;; blanca
+                   (80 190)     ;; verde
+                   (240 370)    ;; amarilla
+                   (400 190)    ;; azul
+                   (240 190)    ;; roja
+                   (560 190))]  ;; naranja
+                [(= tamaño 5)
+                 '((230 10)     ;; blanca
+                   (60 200)     ;; verde
+                   (230 390)    ;; amarilla
+                   (400 200)    ;; azul
+                   (230 200)    ;; roja
+                   (570 200))]  ;; naranja
+                [(= tamaño 6)
+                 '((210 10)     ;; blanca
+                   (20 220)     ;; verde
+                   (210 430)    ;; amarilla
+                   (400 220)    ;; azul
+                   (210 220)    ;; roja
+                   (590 220))]  ;; naranja
+                [else
+                 '((250 50)     ;; blanca
+                   (100 180)    ;; verde
+                   (250 310)    ;; amarilla
+                   (400 180)    ;; azul
+                   (250 180)    ;; roja
+                   (550 180))]))  ;; naranja
+
+            (define etiquetas
+              '("Cara Blanca" "Cara Verde" "Cara Amarilla" 
+                "Cara Azul" "Cara Roja" "Cara Naranja"))
+
+            ;; Dibujar etiquetas primero
+            (define (dibujar-etiquetas etiquetas posiciones)
+              (cond
+                [(null? etiquetas) '()]
+                [else
+                 (define etiqueta (car etiquetas))
+                 (define pos (car posiciones))
+                 (mostrar-etiqueta-cara dc etiqueta (car pos) (- (cadr pos) 20))
+                 (dibujar-etiquetas (cdr etiquetas) (cdr posiciones))]))
+
+            ;; Dibujar todas las caras
+            (define (dibujar-todas posiciones nombres)
+              (cond
+                [(null? posiciones) '()]
+                [else
+                 (define pos (car posiciones))
+                 (define nombre (car nombres))
+                 (dibujar-cara canvas dc 
+                              (cadr (obtener-cara cubo-resultado nombre))
+                              (car pos) (cadr pos) tamaño)
+                 (dibujar-todas (cdr posiciones) (cdr nombres))]))
+
+            (dibujar-etiquetas etiquetas posiciones)
+            (dibujar-todas posiciones
+                          '("Cara blanca" "Cara verde" "Cara amarilla" 
+                            "Cara azul" "Cara roja" "Cara naranja")))]))
+
+  (send frame show #t))
+
+
+
 
 ;; Ejemplos de uso:
-;; (RS 3 '([cubo]) '(F1D C2A F3I))
-;; (RS 2 '([cubo]) '(F1D C1A))
+;; (RS 3 '() '(F1D C2A F3I))  ; Inicializa un cubo 3x3 y aplica movimientos
+;; (RS 2 '() '(F1D F2I))      ; Inicializa un cubo 2x2 y aplica movimientos
+;; También se puede pasar un cubo previamente inicializado:
+;; (define mi-cubo (crear-cubo-3x3))
+;; (RS 3 (list mi-cubo) '(F1D C2A F3I))
