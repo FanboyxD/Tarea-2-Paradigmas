@@ -579,6 +579,3 @@
 ;; Ejemplos de uso:
 ;; (RS 3 '() '(F1D C2A F3I))  ; Inicializa un cubo 3x3 y aplica movimientos
 ;; (RS 2 '() '(F1D F2I))      ; Inicializa un cubo 2x2 y aplica movimientos
-;; También se puede pasar un cubo previamente inicializado:
-;; (define mi-cubo (crear-cubo-3x3))
-;; (RS 3 (list mi-cubo) '(F1D C2A F3I))
