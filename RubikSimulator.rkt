@@ -8,17 +8,6 @@
     ((equal? (caar cubo) nombre) (car cubo))
     (else (obtener-cara (cdr cubo) nombre))))
 
-;; Función directa para obtener el contenido de una cara
-(define (obtener-contenido-cara cubo nombre)
-  (cadr (obtener-cara cubo nombre)))
-
-;; Función para actualizar una cara en el cubo
-(define (actualizar-cara cubo nombre nuevo-contenido)
-  (cond
-    ((null? cubo) '())
-    ((equal? (caar cubo) nombre) 
-     (cons (list nombre nuevo-contenido) (cdr cubo)))
-    (else (cons (car cubo) (actualizar-cara (cdr cubo) nombre nuevo-contenido)))))
 
 ;; FUNCIONES PARA MANIPULAR ELEMENTOS DE LAS CARAS
 
@@ -34,10 +23,6 @@
     ((null? cara) '())
     ((= indice 0) (cons nuevo-valor (cdr cara)))
     (else (cons (car cara) (actualizar-elemento-por-indice (cdr cara) (- indice 1) nuevo-valor)))))
-
-;; Función para convertir posición fila/columna a índice lineal
-(define (posicion-a-indice fila columna tamaño)
-  (+ (- columna 1) (* (- fila 1) tamaño)))
 
 ;; Función para obtener un elemento específico de una cara
 (define (obtener-elemento cara fila columna tamaño)
