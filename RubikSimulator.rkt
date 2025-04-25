@@ -556,7 +556,7 @@
   (sleep/yield 0.5)
   (animar-movimientos frame canvas cubo-inicial movimientos tamaño))
 
-;; Modificar la función RS para usar la nueva interfaz animada
+;; Funcion RS para iniciar el programa
 (define (RS tamaño cubo-inicial movimientos)
   (define cubo-base 
     (cond
